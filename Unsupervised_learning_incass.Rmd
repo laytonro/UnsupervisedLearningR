@@ -1,0 +1,490 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+# Exercise I: Principal Component Analysis
+
+Recall the `mtcars` dataset we work with before, which compirses fuel 
+consumption and other aspects of design and performance for 32 cars from 1974.
+The dataset has 11 dimensions, that is more than it is possible to visualize at 
+the same.
+
+```{r}
+library(tidyverse)
+head(mtcars)
+```
+
+a. Use `prcomp()` to compute a PCA for `mtcars`. Remember to set the
+scale parameter, as the variables are in different units and have different
+ranges
+```{r}
+length(mtcars)
+pca <- prcomp(mtcars, scale. = TRUE)
+
+```
+
+
+b. Generate a scree plot and note how many dimensions should you retain.
+
+```{r}
+screeplot(pca, npcs = 11)
+
+#2 dimensions
+```
+
+
+c. Compute the percentage of variance explained by each of the principal
+components.
+```{r}
+summary(pca)
+
+```
+
+
+d. Generate a biplot for the PCA projection. Use the loadings matrix to inspect
+which variables contributes most to PC1 and which to PC2. What do the PC1 and
+PC2 correspond to? How are the cars distributed on this representation?
+Does the "car map" make sense?
+
+```{r}
+library(ggfortify)
+
+autoplot(pca, loadings = TRUE, loadings.label = TRUE)
+
+pca$rotation
+
+#cyl is biggest for PC1
+#qsec is biggest for PC2
+
+```
+
+
+# Exercise 2: Cluster Analysis
+
+## Part 1: k-means clustering
+
+We will generate synthetic clustered data to use for k-means clustering.
+```{r}
+set.seed(489576)
+N <- 1000
+C1 <- data.frame(cluster = "C1", x = rnorm(n = N, mean = 1), y = rnorm(n = N, mean = 1))
+C2 <- data.frame(cluster = "C2", x = rnorm(n = N, mean = -2), y = rnorm(n = N, mean = -5))
+C3 <- data.frame(cluster = "C3", x = rnorm(n = N, mean = 5), y = rnorm(n = N, mean = 1))
+DF <- rbind(C1, C2, C3)
+```
+
+```{r}
+ggplot(DF, aes(x, y, color = cluster)) + 
+  geom_point()
+```
+
+a. Apply k-means with k = 3 (as you know the true number of clusters).
+Print the cluster centers.
+```{r}
+library(SingleCellExperiment)
+library(dplyr)
+library(tidyverse)
+
+clust.kmeans <- kmeans(DF %>%select(x,y), centers=3)
+```
+
+
+b. Print a confusion map to compare k-means cluster assignment with
+the true cluster labels.
+
+```{r}
+
+table(DF[,1],clust.kmeans$cluster)
+
+```
+
+
+c. Generate a scatter plot of points, now colored by the cluster assignment.
+
+```{r}
+
+ggplot() + geom_point(aes(x=DF$x,y=DF$y), color=clust.kmeans$cluster)
+
+```
+
+
+d. Now pretend that you don't know the real number of clusters. Use k = 4
+and recompute kmeans. Plot the results and see what happened.
+
+```{r}
+clust.kmeans2 <- kmeans(DF %>%select(x,y), centers=4)
+ggplot() + geom_point(aes(x=DF$x,y=DF$y), color=clust.kmeans2$cluster)
+
+#every time you run it, the groups are different. but with k=3, answers were consistent
+```
+
+
+e. Still Pretending that you do not know the real number of clusters, how would you select it? USe your favorite method (elbow, gap statistic or silhouette) to find a reasonable estimate of the number of clusters
+
+```{r}
+library(cluster)
+set.seed(110010101)
+gaps <- clusGap(DF %>%select(x,y), kmeans, K.max=20)
+
+best.k <- maxSE(gaps$Tab[,"gap"], gaps$Tab[,"SE.sim"])
+best.k
+plot(gaps$Tab[,"gap"], xlab="Number of clusters", ylab="Gap statistic")
+abline(v=best.k, col="red")
+```
+
+
+## Part 2: Hierarchical Clustering
+
+In this exercise you will you use a dataset published in a study by
+[Khan et al. 2001](https://www.nature.com/articles/nm0601_673)
+to perform a hierarchical clustering of the patients in the study based
+on their overall gene expression data.
+
+This data set consists of expression levels for 2,308 genes.
+The training and test sets consist of 63 and 20 observations (tissue samples) 
+respectively.
+
+Here, we will use the train set, as we now are only interested in
+learning how `hclust()` works. First, load the `ISLR` where the
+data is available. The gene expression data is available in an object
+`Khan$xtrain`; you can learn more about the data set by typing in `?Khan`
+after loading `ISLR` package.
+
+```{r}
+library(ISLR)
+gene.expression <- Khan$xtrain
+dim(gene.expression)
+```
+
+a. Compute a (Euclidean) distance matrix between each pair of samples.
+
+```{r}
+dist(gene.expression, method = "euclidean", diag=FALSE,upper=FALSE,p=2)
+```
+
+b. Perform hierarchical clustering using average linkage.
+
+```{r}
+
+dist.416b <- dist(gene.expression)
+tree.416b <- hclust(dist.416b, "ward.D2")
+
+dend <- as.dendrogram(tree.416b, hang=0.1)
+
+```
+
+c. Plot a dendrogram associated with the hierarchical clustering you just
+computed. In this example, you actually have the lables of the tissue samples,
+however, the algorithms was blinded to them. By adding labels to the dendrogram
+corresponding to `Khan$ytrain`, check if the clustering performed groups the 
+observations from same tumor class nearby. 
+
+```{r}
+
+# tree.416b$labels <- seq_along(tree.416b$labels)
+# dend <- as.dendrogram(tree.416b, hang=0.1)
+# 
+# combined.fac <- paste0(Khan$ytrain, ".", 
+#     sub(" .*", "", Khan$ytrain))
+# [combined.fac][order.dendrogram(dend)]
+# 
+
+plot(dend)
+```
+
+## Exercise Extra: 2D visualization of MNIST data
+
+* Download MNIST data of the digits images from 
+[Kaggle competition](https://www.kaggle.com/c/digit-recognizer).
+* The code is adapted from the one found [here](https://www.kaggle.com/gospursgo/digit-recognizer/clusters-in-2d-with-tsne-vs-pca/code). 
+
+The files are data on the 28x28 pixel
+images of digits (0-9). The data is composed of:
+
+* `label` column denoting the digit on the image
+* `pixel0` through `pixel783` contain information on the pixel intensity
+(on the scale of 0-255), and together form the vectorized version of 
+the 28x28 pixel digit image
+
+
+Download the data from the CME195  course repository:
+
+```{r}
+# load the already subsetted MNIST data.
+mnist.url <- "https://github.com/cme195/cme195.github.io/raw/master/assets/data/mnist_small.csv"
+train <- read.csv(mnist.url, row.names = 1)
+dim(train)
+train[1:10, 1:10]
+```
+
+a. Compute and the PCA for the data. Then, extract the first two principal
+component scores for the data.
+
+b. Plot the 2D principal component scores matrix.
+
+c. Compute a tSNE embedding.
+
+d. Visualize the tSNE 2D projection.
+
+e. What do you observe? How does tSNE compare with PCA in this case?
+
+
+
+
+
+
+# Exercise 3: Ads
+
+a. Read the data from "http://www-bcf.usc.edu/~gareth/ISL/Advertising.csv"
+containing information on sales of a product and the amount spent on advertising
+using different media channels.
+
+```{r}
+ads <- read.csv("Advertising.csv")
+```
+
+b. Generate a scatterplot of sales against the amount of TV advertising and 
+add a linear fit line.
+
+```{r}
+
+plot(sales ~ TV, data = ads)
+abline(lm(sales ~ TV, data = ads))
+
+
+```
+
+c. Now make a 3D scatterplot with axes corresponding to 'sales', 'TV'
+and 'radio'.
+
+```{r}
+library("scatterplot3d") # load
+
+
+scatterplot3d(ads[,c(2,3,5)], angle = 40)
+
+```
+
+d. The dataset has 200 rows. Divide it into a train set with 150 observations
+and a test set with 50 observations, i.e. use `sample(1:200, n = 150)` to
+randomly choose row indices of the advertising dataset to include in the 
+train set. The remaining indices should be used for the test set. Remember
+to choose and set the seed for randomization!
+
+```{r}
+
+set.seed(100)
+
+x <- sample(1:200, size = 200)
+
+train <- x[1:150]
+test <- x[151:200]
+```
+
+e. Fit a linear model to the training set, where the sales values are
+predicted by the amount of TV advertising. Print the summary of the fitted model.
+Then, predict the sales values for the test set and evaluate the test model 
+accuracy in terms of root mean squared error (MSE), which measures 
+the average level of error between the prediction and the true response.
+$$RMSE = \sqrt{\frac{1}{n} \sum\limits_{i = 1}^n(\hat y_i - y_i)^2}$$
+```{r}
+l <- lm(sales ~ TV, ads[train,])
+summary(l)
+
+testSet <- ads[test,]
+b0 = 7.042490
+b1 = .047010
+
+se = 0
+for (row in 1:nrow(testSet)) {
+  tv <- testSet[row, "TV"]
+  sales <- testSet[row, "sales"]
+  predict_value = b0 + b1 * tv
+  
+  se = se + (sales-predict_value) ^ 2
+}
+rmse1 = sqrt(se/50)
+
+```
+
+
+f. Fit a multiple linerar regression model including all the variables 'TV',
+'radio', 'newspaper' to model the 'sales' in the training set. Then, compute 
+the predicted sales for the test set with the new model and evalued the RMSE.  
+Did the error decrease from the one correspodning to the previous model?
+
+
+```{r}
+l2 <- lm(sales ~ TV + radio + newspaper, ads[train,])
+summary(l2)
+
+testSet <- ads[test,]
+b0 = 2.867562
+b1 = .045332
+b2 = .185882
+b3 = .005226
+
+
+se2 = 0
+for (row in 1:nrow(testSet)) {
+  tv <- testSet[row, "TV"]
+  radio <- testSet[row, "radio"]
+  newp <- testSet[row, "newspaper"]
+
+  sales <- testSet[row, "sales"]
+  predict_value = b0 + b1 * tv + b2 * radio + b3 * newp
+  
+  se2 = se2 + (sales-predict_value) ^ 2
+}
+rmse2 = sqrt(se2/50)
+
+rmse2 - rmse1
+#the error decreased
+
+```
+
+g. Look at the summary output for the multiple regression model and note which 
+of the coefficient in the model is significant. Are all of them significant?
+If not refit the model including only the features found significant.
+Which of the models should you choose? 
+
+
+```{r}
+summary(l2)
+#newspaper is insignificant
+
+l3 <- lm(sales ~ TV + radio, ads[train,])
+summary(l3)
+
+b0 = 2.946431
+b1 = .045379
+b2 = .188946
+
+
+se3 = 0
+for (row in 1:nrow(testSet)) {
+  tv <- testSet[row, "TV"]
+  radio <- testSet[row, "radio"]
+
+  sales <- testSet[row, "sales"]
+  predict_value = b0 + b1 * tv + b2 * radio
+  
+  se3 = se3 + (sales-predict_value) ^ 2
+}
+rmse3 = sqrt(se3/50)
+rmse3
+rmse2
+
+#the RMSE value is smaller for this model, so we should chose this model
+
+```
+
+# Exercise 4: Doctor Visits
+
+Data was collected on doctor visits from a sample of 5,190 people in the 1977/1978 Australian Health Survey. Cameron (1986) sought to explain the variation in doctor visits using one or more explanatory variables. The data can be found in an R data set from `library(AER)` accessible with the command `DoctorVisits`. Variable descriptions can be found under `help("DoctorVisits")`
+
+Explore the use of a zero-inflated model for this data. Begin with a histogram of the number of visits, some EDA, and fitting several models. Summarize your results.Summarize your results. Compare your results with a standard Poisson. 
+
+```{r}
+library(AER)
+
+data("DoctorVisits", package = "AER")
+library("MASS")
+
+hist(DoctorVisits$visits)
+#most of the patients had 0 visits
+
+
+```
+
+
+# Exercise 5: Movies
+
+Recall the movies data-frame we used ealier in the bootcamp. It contains
+information on movies from the last three decates, which was scrapped from
+the IMDB database.
+
+```{r}
+library(dplyr)
+url <- "https://raw.githubusercontent.com/Juanets/movie-stats/master/movies.csv"
+movies <- tbl_df(read.csv(url))
+
+```
+
+a. Generate a boxplot of runtimes for action movies and comedies
+with jittered points overlaid on top. You might consider setting collor, 
+fill and alpha arguments to modify clarity and transparency of the plot.
+
+```{r}
+
+colnames(movies)
+
+movies2 <- movies %>% filter(genre == "Action" | genre == "Comedy")
+
+ggplot(movies2,aes(x=genre, y=runtime, color = genre)) + 
+  geom_boxplot() + 
+  geom_jitter(alpha = .1)
+```
+
+b. Test a hypothesis that the action movies have higher mean runtime (length)
+than the comedies. Is the difference statistically greater than zero
+at significance level $\alpha = 0.05$?
+
+```{r}
+library(tidyverse)
+library(dplyr)
+
+action <- movies %>% filter(genre == "Action")
+comedy <- movies %>% filter(genre == "Comedy")
+
+t.test(action$runtime, comedy$runtime, alternative = "greater")
+
+#yes, the difference is greater than 0 at significance level p < 2.2e-16
+
+```
+
+
+c. Test the hypothesis that the scores are the same across movie types (keep the movie genre which have at least 20 movies). Plot the data before making a test of your choice. State all the assumptions that you are making when devising your test.
+
+```{r}
+
+movies3 <- movies %>% group_by(genre) %>% mutate(genre_count = n())
+
+
+ggplot(movies3 %>% filter(genre_count>20),aes(x=genre, y=score, color = genre)) +
+  geom_boxplot() + 
+  geom_jitter(alpha = .01)
+
+
+anova_movies <- aov(score ~ genre, movies3 %>% filter(genre_count>20))
+summary(anova_movies)
+#assumption -> normal distribution
+
+```
+
+d. Is there a reason to believe that the scores might differ according to genre? How would you test which one is different (do the test if you have reason to believe that this is the case).
+
+```{r}
+
+#anova is significant, so lm to look at each individual categorical option (genre)
+
+lm_movies <- lm(score ~ genre, movies3 %>% filter(genre_count>20))
+summary(lm_movies)
+
+```
+
+e. Now, suppose your friend at Hollywood wants to know the recipe for making a movie with the best margin (gross-budget). Which genre and runtime should he aim for? Could you fit a model to try to help him out?
+
+```{r}
+lm_bestmargin <- lm(gross ~ genre + runtime, movies3 %>% filter(genre_count>20))
+
+summary(lm_bestmargin)
+
+#animation, not sure run time
+
+```
+
+
+
+
